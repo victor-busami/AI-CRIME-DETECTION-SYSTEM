@@ -558,27 +558,30 @@ class AIModelManager:
             
             # Enhanced crime keyword detection
             crime_keywords = [
-                "fire", "gun", "knife", "explosion", "smoke", "ambulance", "police", 
-                "weapon", "blood", "fight", "shooting", "burning", "torch", "vehicle", 
-                "truck", "car", "robbery", "theft", "assault", "murder", "arson", 
-                "vandalism", "burglary", "kidnap", "hostage", "fraud", "drugs", 
-                "rape", "homicide", "emergency", "accident", "violence", "attack",
-                "bomb", "terrorist", "gang", "crime", "illegal", "dangerous"
+                # Weapons & violence
+                "fire", "gun", "guns", "firearm", "firearms", "knife", "knives", "explosion", "explosives", "smoke", "weapon", "weapons", "blood", "fight", "fighting", "shooting", "shoot", "shootout", "burning", "torch", "assault", "attack", "attacked", "beating", "beaten", "stab", "stabbing", "shot", "shots", "armed", "unarmed",
+                # Vehicles
+                "vehicle", "vehicles", "truck", "trucks", "car", "cars", "motorcycle", "motorbike", "van", "bus", "ambulance", "police", "policeman", "policewoman", "cop", "cops",
+                # Crimes
+                "robbery", "robber", "robbers", "robbed", "rob", "theft", "thief", "thieves", "steal", "stolen", "burglary", "burglar", "burglars", "break-in", "breakin", "break in", "vandalism", "vandal", "vandals", "arson", "arsonist", "arsonists", "kidnap", "kidnapping", "kidnapped", "kidnapper", "kidnappers", "hostage", "hostages", "fraud", "scam", "scammer", "scammers", "drugs", "drug", "trafficking", "rape", "sexual assault", "homicide", "murder", "murderer", "murderers", "manslaughter", "emergency", "accident", "accidents", "violence", "violent", "terrorist", "terrorists", "terrorism", "gang", "gangs", "gangster", "gangsters", "crime", "crimes", "illegal", "dangerous", "danger", "threat", "threaten", "threatened", "hostility", "hostile", "extortion", "extort", "blackmail", "blackmailer", "blackmailers", "shootout", "shootouts", "hostage situation", "carjacking", "carjack", "carjacked", "looting", "looters", "looter", "riot", "riots", "rioter", "rioters", "smuggling", "smuggler", "smugglers", "pickpocket", "pickpockets", "pickpocketing", "shoplifting", "shoplifter", "shoplifters", "abduction", "abducted", "abductor", "abductors", "molestation", "molester", "molesters", "cybercrime", "cyber attack", "cyberattack", "scamming", "scammed", "bribery", "bribe", "bribed", "briber", "bribers"
             ]
-            
+
             found_keywords = []
             severity_score = 0.0
-            
+
+            lowered_text = text.lower()
             for keyword in crime_keywords:
-                if re.search(rf"\b{keyword}\b", text, re.IGNORECASE):
+                if keyword in lowered_text:
                     found_keywords.append(keyword)
-                    severity_score += SEVERITY_WEIGHTS.get(keyword, 0.3)
+                    severity_score += SEVERITY_WEIGHTS.get(keyword.rstrip('s'), 0.3)
             
             # Normalize severity score
             severity_score = min(severity_score, 1.0)
             
-            # Determine priority based on sentiment, keywords, and severity
-            if sentiment_label == "Negative" and (found_keywords or severity_score > 0.5):
+            # Determine priority: always urgent if severity is high
+            if severity_score > self.auto_escalate_threshold:
+                priority = "Urgent ❗"
+            elif sentiment_label == "Negative" and (found_keywords or severity_score > 0.5):
                 priority = "Urgent ❗"
             elif found_keywords or sentiment_label == "Negative" or severity_score > 0.3:
                 priority = "Normal ⚠️"
