@@ -1,0 +1,17 @@
+torch
+transformers
+ftfy
+tqdm
+Pillow
+# For CLIP
+git+https://github.com/openai/CLIP.git
+
+# Additional requirements for your app
+streamlit
+pandas
+ultralytics
+numpy
+plotly
+folium
+streamlit-folium
+torchvision
