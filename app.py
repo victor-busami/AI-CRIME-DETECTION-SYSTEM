@@ -205,7 +205,7 @@ elif not st.session_state.admin_page:
                     df = pd.DataFrame([report_data])
 
             df.to_csv("reports.csv", index=False)
-            st.image(annotated_img, caption="🔍 AI Detection Result", use_column_width=True)
+            st.image(annotated_img, caption="🔍 AI Detection Result", use_container_width=True)
             st.success(f"✅ Report submitted! Objects Detected: {', '.join(detected_objects) or 'None'}")
             st.info(f"🧠 Sentiment: {sentiment_label} | 🚦 Priority: {priority}")
         else:

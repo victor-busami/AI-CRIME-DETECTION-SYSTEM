@@ -1,0 +1,2 @@
+timestamp,location,latitude,longitude,image_path,annotated_path,description,objects_detected,priority,sentiment
+2025-07-16 12:15:44,Eldoret,0.5143,35.2698,report_20250716_121544.png,annotated_20250716_121544.png,goons,"person, person, person, person, truck, person",Low Priority ✅,LABEL_0
