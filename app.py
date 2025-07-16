@@ -1048,19 +1048,6 @@ def render_user_submission():
                 options=list(LOCATION_COORDS.keys()),
                 help="Select the location where the incident occurred"
             )
-            
-            # Priority indicator (user suggestion)
-            user_priority = st.selectbox(
-                "🚨 Urgency Level (Your Assessment)",
-                ["Low", "Medium", "High", "Emergency"],
-                help="How urgent do you think this situation is?"
-            )
-            
-            # Anonymous reporting option
-            anonymous = st.checkbox(
-                "🕶️ Submit Anonymously",
-                help="Your identity will not be recorded"
-            )
         
         # Incident description with guidance
         st.write("### 📝 Incident Description")
@@ -1071,30 +1058,6 @@ def render_user_submission():
             help="Provide as much detail as possible. This helps our AI better understand the situation."
         )
         
-        # Additional details
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            incident_time = st.time_input(
-                "⏰ Approximate Time",
-                help="When did the incident occur?"
-            )
-        
-        with col2:
-            witness_count = st.number_input(
-                "👥 Number of Witnesses",
-                min_value=0,
-                max_value=100,
-                value=0,
-                help="How many people witnessed the incident?"
-            )
-        
-        # Contact information (optional)
-        with st.expander("📞 Contact Information (Optional)"):
-            contact_name = st.text_input("Your Name")
-            contact_phone = st.text_input("Phone Number")
-            contact_email = st.text_input("Email Address")
-        
         # Submit button
         submitted = st.form_submit_button("🚀 Submit Report", use_container_width=True)
         
@@ -1103,22 +1066,12 @@ def render_user_submission():
                 process_crime_report(
                     uploaded_file=uploaded_file,
                     location=location,
-                    description=description,
-                    user_priority=user_priority,
-                    anonymous=anonymous,
-                    incident_time=incident_time,
-                    witness_count=witness_count,
-                    contact_info={
-                        'name': contact_name,
-                        'phone': contact_phone,
-                        'email': contact_email
-                    }
+                    description=description
                 )
             else:
                 st.error("❌ Please upload an image and provide a description.")
 
-def process_crime_report(uploaded_file, location, description, user_priority, anonymous, 
-                        incident_time, witness_count, contact_info):
+def process_crime_report(uploaded_file, location, description):
     """Process and analyze submitted crime report"""
     
     # Show processing indicator
@@ -1192,7 +1145,7 @@ def process_crime_report(uploaded_file, location, description, user_priority, an
             'flagged_for_review': flagged_for_review,
             'clip_similarity': clip_similarity,
             'severity_score': severity_score,
-            'submitted_by': st.session_state.username if not anonymous else 'anonymous',
+            'submitted_by': st.session_state.username if hasattr(st.session_state, 'username') and st.session_state.username else 'anonymous',
             'status': 'pending'
         }
         
