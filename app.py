@@ -66,11 +66,10 @@ def determine_priority(detected_objects, sentiment_label):
         "fire", "gun", "knife", "explosion", "smoke", "ambulance", "police", "weapon", "blood", "fight", "shooting", "burning", "torch", "vehicle", "truck", "car"
     ]
     detected_str = ", ".join(detected_objects).lower()
-    if any(keyword in detected_str for keyword in danger_keywords):
+    danger_found = any(keyword in detected_str for keyword in danger_keywords)
+    if danger_found and sentiment_label == "Negative":
         return "Urgent ❗"
-    if sentiment_label == "Negative":
-        return "Urgent ❗"
-    elif sentiment_label == "Neutral":
+    elif danger_found or sentiment_label == "Negative":
         return "Normal ⚠️"
     else:
         return "Low Priority ✅"

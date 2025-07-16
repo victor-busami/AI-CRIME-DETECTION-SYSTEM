@@ -1,3 +1,4 @@
 timestamp,location,latitude,longitude,image_path,annotated_path,description,objects_detected,priority,sentiment
-2025-07-16 12:44:15,Nairobi,-1.2921,36.8219,report_20250716_124415.png,annotated_20250716_124415.png,mama mboga,"person, person, person, person, truck, person",Urgent ❗,Neutral
-2025-07-16 12:45:04,Nairobi,-1.2921,36.8219,report_20250716_124504.png,annotated_20250716_124504.png,mama mboga,person,Normal ⚠️,Neutral
+2025-07-16 19:29:10,Nairobi,-1.2921,36.8219,report_20250716_192909.png,annotated_20250716_192909.png,burnt cars,person,Normal ⚠️,Negative
+2025-07-16 19:29:36,Nakuru,-0.3031,36.08,report_20250716_192935.png,annotated_20250716_192935.png,guns,person,Low Priority ✅,Neutral
+2025-07-16 19:29:54,Nakuru,-0.3031,36.08,report_20250716_192954.png,annotated_20250716_192954.png,"knives,goons",person,Normal ⚠️,Negative
