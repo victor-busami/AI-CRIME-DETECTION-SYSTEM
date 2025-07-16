@@ -61,6 +61,20 @@ def analyze_sentiment(text):
     else:  # LABEL_2
         return "Low Priority ✅", "Positive"
 
+def determine_priority(detected_objects, sentiment_label):
+    danger_keywords = [
+        "fire", "gun", "knife", "explosion", "smoke", "ambulance", "police", "weapon", "blood", "fight", "shooting", "burning", "torch", "vehicle", "truck", "car"
+    ]
+    detected_str = ", ".join(detected_objects).lower()
+    if any(keyword in detected_str for keyword in danger_keywords):
+        return "Urgent ❗"
+    if sentiment_label == "Negative":
+        return "Urgent ❗"
+    elif sentiment_label == "Neutral":
+        return "Normal ⚠️"
+    else:
+        return "Low Priority ✅"
+
 # ------------------ LOGIN SIDEBAR ------------------
 with st.sidebar:
     st.header("🔐 Admin Login")
@@ -173,6 +187,7 @@ elif not st.session_state.admin_page:
             img_np = np.array(img)
             annotated_img, detected_objects = detect_objects(img_np)
             priority, sentiment_label = analyze_sentiment(description)
+            priority = determine_priority(detected_objects, sentiment_label)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             img_path = f"report_{timestamp}.png"

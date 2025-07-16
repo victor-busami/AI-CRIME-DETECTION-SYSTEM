@@ -1,0 +1,3 @@
+timestamp,location,latitude,longitude,image_path,annotated_path,description,objects_detected,priority,sentiment
+2025-07-16 12:44:15,Nairobi,-1.2921,36.8219,report_20250716_124415.png,annotated_20250716_124415.png,mama mboga,"person, person, person, person, truck, person",Urgent ❗,Neutral
+2025-07-16 12:45:04,Nairobi,-1.2921,36.8219,report_20250716_124504.png,annotated_20250716_124504.png,mama mboga,person,Normal ⚠️,Neutral
