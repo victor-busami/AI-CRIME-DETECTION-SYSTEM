@@ -1,3 +1,0 @@
-timestamp,image_path,annotated_path,description,objects_detected,priority,sentiment
-2025-07-16 11:23:46,report_20250716_112346.png,annotated_20250716_112346.png,guns,"person, person, person, person, truck, person",,
-2025-07-16 11:34:07,report_20250716_113407.png,annotated_20250716_113407.png,shootout,"person, person, person, person, truck, person",Low Priority ✅,LABEL_1

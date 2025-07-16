@@ -7,13 +7,23 @@ from ultralytics import YOLO
 import numpy as np
 from transformers import pipeline
 
-# ------------------ APP CONFIG ------------------
+# ------------------ CONFIG ------------------
 st.set_page_config(page_title="AI Crime Detector", layout="centered")
 st.title("🚨 AI Crime Detection System")
 
 # ------------------ CREDENTIALS ------------------
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "crime123"
+
+# ------------------ LOCATION COORDINATES ------------------
+LOCATION_COORDS = {
+    "Nairobi": (-1.2921, 36.8219),
+    "Mombasa": (-4.0435, 39.6682),
+    "Kisumu": (-0.0917, 34.7679),
+    "Eldoret": (0.5143, 35.2698),
+    "Nakuru": (-0.3031, 36.0800),
+    "Other": (0.0, 0.0)
+}
 
 # ------------------ SESSION STATE ------------------
 if "logged_in" not in st.session_state:
@@ -31,7 +41,7 @@ def load_model():
 def load_sentiment_pipeline():
     return pipeline("sentiment-analysis", model="cardiffnlp/twitter-roberta-base-sentiment")
 
-# ------------------ FUNCTIONALITY ------------------
+# ------------------ FUNCTIONS ------------------
 def detect_objects(image):
     model = load_model()
     results = model.predict(image, conf=0.4)
@@ -51,7 +61,7 @@ def analyze_sentiment(text):
     else:
         return "Low Priority ✅", label
 
-# ------------------ LOGIN PANEL ------------------
+# ------------------ LOGIN SIDEBAR ------------------
 with st.sidebar:
     st.header("🔐 Admin Login")
     if not st.session_state.logged_in:
@@ -62,13 +72,14 @@ with st.sidebar:
                 st.success("✅ Logged in successfully.")
                 st.session_state.logged_in = True
                 st.session_state.admin_page = True
+                st.rerun()
             else:
                 st.error("❌ Incorrect credentials.")
     else:
         if st.button("Logout"):
             st.session_state.logged_in = False
             st.session_state.admin_page = False
-            st.experimental_rerun()
+            st.rerun()
 
 # ------------------ ADMIN DASHBOARD ------------------
 if st.session_state.admin_page:
@@ -80,7 +91,12 @@ if st.session_state.admin_page:
             if df.empty:
                 st.info("No reports yet.")
             else:
-                # Filters
+                # 🌍 Show Map
+                st.subheader("🗺️ Crime Map")
+                if "latitude" in df.columns and "longitude" in df.columns:
+                    st.map(df[["latitude", "longitude"]])
+
+                # 🔍 Filters
                 with st.expander("🔍 Filter Reports"):
                     priority_filter = st.multiselect("Filter by Priority", options=df["priority"].unique())
                     sentiment_filter = st.multiselect("Filter by Sentiment", options=df["sentiment"].unique())
@@ -94,24 +110,61 @@ if st.session_state.admin_page:
                     if object_filter:
                         filtered_df = filtered_df[filtered_df["objects_detected"].str.contains(object_filter, case=False, na=False)]
 
-                # Show filtered results
                 for _, row in filtered_df.iterrows():
-                    st.write(f"🕒 {row['timestamp']}")
+                    st.write(f"🕒 {row['timestamp']} | 📍 {row['location']}")
                     if os.path.exists(row['annotated_path']):
                         st.image(row['annotated_path'], caption=f"Detected: {row['objects_detected']}", width=400)
                     st.write(f"📄 Description: {row['description']}")
                     st.write(f"🧠 Sentiment: {row['sentiment']} | 🚦 Priority: {row['priority']}")
                     st.markdown("---")
+
+                # 📊 Analytics
+                with st.expander("📈 Analytics Dashboard", expanded=False):
+                    st.write("Visualize crime trends and summaries:")
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+                    # 1. Reports Over Time
+                    st.markdown("**🕒 Reports Over Time**")
+                    time_series = df["timestamp"].dt.date.value_counts().sort_index()
+                    st.line_chart(time_series)
+
+                    # 2. Common Objects
+                    st.markdown("**🔍 Most Common Objects Detected**")
+                    all_objects = df["objects_detected"].dropna().str.split(", ").explode()
+                    common_objects = all_objects.value_counts()
+                    st.bar_chart(common_objects)
+
+                    # 3. Sentiment Distribution
+                    st.markdown("**🧠 Sentiment Distribution**")
+                    sentiment_counts = df["sentiment"].value_counts()
+                    st.bar_chart(sentiment_counts)
+
+                    # 4. Location Count
+                    st.markdown("**📍 Reports by Location**")
+                    location_counts = df["location"].value_counts()
+                    st.bar_chart(location_counts)
+
+                    # 5. Export CSV
+                    st.markdown("**📁 Export Reports**")
+                    csv = df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="📥 Download Full Report Data (CSV)",
+                        data=csv,
+                        file_name="crime_reports.csv",
+                        mime="text/csv"
+                    )
+
         except Exception as e:
             st.error(f"Error reading reports: {e}")
     else:
         st.info("No reports submitted yet.")
 
-# ------------------ USER REPORT SUBMISSION ------------------
+# ------------------ USER SUBMISSION ------------------
 elif not st.session_state.admin_page:
     st.subheader("📝 Submit a Crime Report")
 
     uploaded_file = st.file_uploader("📷 Upload Image", type=["jpg", "jpeg", "png"])
+    location = st.selectbox("📍 Select Incident Location", options=list(LOCATION_COORDS.keys()))
     description = st.text_area("Describe the Incident")
 
     if st.button("Submit Report"):
@@ -127,8 +180,13 @@ elif not st.session_state.admin_page:
             Image.fromarray(img_np).save(img_path)
             Image.fromarray(annotated_img).save(annotated_path)
 
+            lat, lon = LOCATION_COORDS.get(location, (0.0, 0.0))
+
             report_data = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "location": location,
+                "latitude": lat,
+                "longitude": lon,
                 "image_path": img_path,
                 "annotated_path": annotated_path,
                 "description": description,
@@ -152,5 +210,3 @@ elif not st.session_state.admin_page:
             st.info(f"🧠 Sentiment: {sentiment_label} | 🚦 Priority: {priority}")
         else:
             st.warning("Please upload an image and enter a description.")
-
-# ------------------ END ------------------
