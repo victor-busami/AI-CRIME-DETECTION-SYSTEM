@@ -54,12 +54,12 @@ def analyze_sentiment(text):
     sentiment_pipeline = load_sentiment_pipeline()
     result = sentiment_pipeline(text)[0]
     label = result["label"].upper()
-    if "NEGATIVE" in label:
-        return "Urgent ❗", label
-    elif "NEUTRAL" in label:
-        return "Normal ⚠️", label
-    else:
-        return "Low Priority ✅", label
+    if label == "LABEL_0":
+        return "Urgent ❗", "Negative"
+    elif label == "LABEL_1":
+        return "Normal ⚠️", "Neutral"
+    else:  # LABEL_2
+        return "Low Priority ✅", "Positive"
 
 # ------------------ LOGIN SIDEBAR ------------------
 with st.sidebar:

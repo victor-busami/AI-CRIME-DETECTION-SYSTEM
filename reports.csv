@@ -1,2 +1,5 @@
 timestamp,location,latitude,longitude,image_path,annotated_path,description,objects_detected,priority,sentiment
 2025-07-16 12:15:44,Eldoret,0.5143,35.2698,report_20250716_121544.png,annotated_20250716_121544.png,goons,"person, person, person, person, truck, person",Low Priority ✅,LABEL_0
+2025-07-16 12:21:16,Other,0.0,0.0,report_20250716_122116.png,annotated_20250716_122116.png,robbery and drivethrough,"person, person, person, person, truck, person",Urgent ❗,Negative
+2025-07-16 12:22:00,Eldoret,0.5143,35.2698,report_20250716_122200.png,annotated_20250716_122200.png,running,"person, person, person, person, truck, person",Normal ⚠️,Neutral
+2025-07-16 12:22:24,Mombasa,-4.0435,39.6682,report_20250716_122224.png,annotated_20250716_122224.png,murders,"person, person, person, person, truck, person",Urgent ❗,Negative
