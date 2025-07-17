@@ -1071,20 +1071,33 @@ def render_user_submission():
             else:
                 st.error("❌ Please upload an image and provide a description.")
 
+def extract_crime_keywords_from_objects(objects_list):
+    """Extract crime-related keywords from detected objects."""
+    # Use the same keywords as in analyze_sentiment_advanced
+    crime_keywords = [
+        "fire", "gun", "guns", "firearm", "firearms", "knife", "knives", "explosion", "explosives", "smoke", "weapon", "weapons", "blood", "fight", "fighting", "shooting", "shoot", "shootout", "burning", "torch", "assault", "attack", "attacked", "beating", "beaten", "stab", "stabbing", "shot", "shots", "armed", "unarmed",
+        "vehicle", "vehicles", "truck", "trucks", "car", "cars", "motorcycle", "motorbike", "van", "bus", "ambulance", "police", "policeman", "policewoman", "cop", "cops",
+        "robbery", "robber", "robbers", "robbed", "rob", "theft", "thief", "thieves", "steal", "stolen", "burglary", "burglar", "burglars", "break-in", "breakin", "break in", "vandalism", "vandal", "vandals", "arson", "arsonist", "arsonists", "kidnap", "kidnapping", "kidnapped", "kidnapper", "kidnappers", "hostage", "hostages", "fraud", "scam", "scammer", "scammers", "drugs", "drug", "trafficking", "rape", "sexual assault", "homicide", "murder", "murderer", "murderers", "manslaughter", "emergency", "accident", "accidents", "violence", "violent", "terrorist", "terrorists", "terrorism", "gang", "gangs", "gangster", "gangsters", "crime", "crimes", "illegal", "dangerous", "danger", "threat", "threaten", "threatened", "hostility", "hostile", "extortion", "extort", "blackmail", "blackmailer", "blackmailers", "shootout", "shootouts", "hostage situation", "carjacking", "carjack", "carjacked", "looting", "looters", "looter", "riot", "riots", "rioter", "rioters", "smuggling", "smuggler", "smugglers", "pickpocket", "pickpockets", "pickpocketing", "shoplifting", "shoplifter", "shoplifters", "abduction", "abducted", "abductor", "abductors", "molestation", "molester", "molesters", "cybercrime", "cyber attack", "cyberattack", "scamming", "scammed", "bribery", "bribe", "bribed", "briber", "bribers"
+    ]
+    found = []
+    for obj in objects_list:
+        for kw in crime_keywords:
+            if kw in obj.lower() and kw not in found:
+                found.append(kw)
+    return found
+
 def process_crime_report(uploaded_file, location, description):
-    """Process and analyze submitted crime report"""
-    
-    # Show processing indicator
+    """Process and analyze submitted crime report with improved logic for priority and sentiment."""
     with st.spinner("🔍 Analyzing report with AI..."):
-        # Load and process image
         image = Image.open(uploaded_file)
         img_np = np.array(image)
-        
+
         # AI Analysis
         annotated_img, detected_objects, detection_confidence = ai_manager.detect_objects_ensemble(img_np)
-        priority, sentiment_label, found_keywords, severity_score = ai_manager.analyze_sentiment_advanced(description)
+        desc_priority, sentiment_label, found_keywords, severity_score = ai_manager.analyze_sentiment_advanced(description)
         clip_similarity = ai_manager.compute_clip_similarity(img_np, description)
-        
+        detected_crime_keywords = extract_crime_keywords_from_objects(detected_objects)
+
         # Enhanced validation logic with optimized thresholds
         flagged_for_review = False
         validation_issues = []
@@ -1108,29 +1121,42 @@ def process_crime_report(uploaded_file, location, description):
             validation_issues.append(f"Low object detection confidence ({detection_confidence:.2f} < {ai_manager.detection_conf})")
             flag_count += 1
 
-        # Flag only if two or more issues are present
+        # --- NEW LOGIC: Combine image and description for priority ---
+        # If both description and image have high-severity crime keywords, or image alone is highly suspicious
+        high_severity_keywords = [kw for kw in found_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
+        high_severity_detected = [kw for kw in detected_crime_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
+        # Use the higher of the two severity scores
+        combined_severity = max(severity_score, sum(SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0.3) for kw in detected_crime_keywords))
+        combined_severity = min(combined_severity, 1.0)
+
+        # Priority logic
+        if high_severity_keywords and high_severity_detected:
+            priority = "Urgent ❗"
+        elif high_severity_detected and not found_keywords:
+            priority = "Normal ⚠️"  # suspicious image, neutral/benign text
+        elif high_severity_keywords and not high_severity_detected:
+            priority = "Normal ⚠️"  # suspicious text, benign image
+        elif found_keywords or detected_crime_keywords or sentiment_label == "Negative" or combined_severity > 0.3:
+            priority = "Normal ⚠️"
+        else:
+            priority = "Low Priority ✅"
+
+        # If the image and description are both highly severe, or the image alone is highly severe, escalate
+        if (high_severity_keywords and high_severity_detected) or (combined_severity > ai_manager.auto_escalate_threshold and high_severity_detected):
+            priority = "Urgent ❗"
+            flagged_for_review = False
+        # If there is a mismatch and at least two issues, flag for review
         if flag_count >= 2:
             flagged_for_review = True
 
-        # Override flagging for high severity using auto-escalate threshold
-        if severity_score > ai_manager.auto_escalate_threshold:
-            flagged_for_review = False
-        
         # Save files
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         img_path = f"uploads/report_{timestamp}.png"
         annotated_path = f"uploads/annotated_{timestamp}.png"
-        
-        # Create upload directory if it doesn't exist
         os.makedirs("uploads", exist_ok=True)
-        
-        # Save images
         image.save(img_path)
         Image.fromarray(annotated_img).save(annotated_path)
-        
-        # Prepare report data
         lat, lon = LOCATION_COORDS.get(location, (0.0, 0.0))
-        
         report_data = {
             'location': location,
             'latitude': lat,
@@ -1141,52 +1167,37 @@ def process_crime_report(uploaded_file, location, description):
             'objects_detected': ", ".join(detected_objects),
             'priority': priority,
             'sentiment': sentiment_label,
-            'keywords': ", ".join(found_keywords),
+            'keywords': ", ".join(sorted(set(found_keywords + detected_crime_keywords))),
             'flagged_for_review': flagged_for_review,
             'clip_similarity': clip_similarity,
-            'severity_score': severity_score,
+            'severity_score': combined_severity,
             'submitted_by': st.session_state.username if hasattr(st.session_state, 'username') and st.session_state.username else 'anonymous',
             'status': 'pending'
         }
-        
-        # Save to database
         report_id = db_manager.insert_report(report_data)
-    
     # Display results
     st.success("✅ Report submitted successfully!")
     st.info(f"📋 Report ID: {report_id}")
-    
-    # Show analysis results
     col1, col2 = st.columns(2)
-    
     with col1:
         st.image(annotated_img, caption="🔍 AI Analysis Results", use_container_width=True)
-    
     with col2:
         st.write("### 📊 Analysis Results")
-        
-        # Priority with color coding
         priority_color = {"Urgent ❗": "red", "Normal ⚠️": "orange", "Low Priority ✅": "green"}
-        st.markdown(f"**Priority:** <span style='color: {priority_color.get(priority, 'black')}'>{priority}</span>", 
-                   unsafe_allow_html=True)
-        
+        st.markdown(f"**Priority:** <span style='color: {priority_color.get(priority, 'black')}'>{priority}</span>", unsafe_allow_html=True)
         st.write(f"**Sentiment:** {sentiment_label}")
-        st.write(f"**Severity Score:** {severity_score:.2f}/1.0")
+        st.write(f"**Severity Score:** {combined_severity:.2f}/1.0")
         st.write(f"**Detection Confidence:** {detection_confidence:.2f}")
         st.write(f"**Image-Text Similarity:** {clip_similarity:.2f}")
-        
         if detected_objects:
             st.write(f"**Objects Detected:** {', '.join(detected_objects)}")
-        
-        if found_keywords:
-            st.write(f"**Keywords Found:** {', '.join(found_keywords)}")
-        
+        if found_keywords or detected_crime_keywords:
+            st.write(f"**Keywords Found:** {', '.join(sorted(set(found_keywords + detected_crime_keywords)))}")
         if flagged_for_review:
             st.warning("⚠️ This report has been flagged for admin review due to:")
             for issue in validation_issues:
                 st.write(f"• {issue}")
-        
-        if severity_score > ai_manager.auto_escalate_threshold:
+        if combined_severity > ai_manager.auto_escalate_threshold and high_severity_detected:
             st.error("🚨 HIGH SEVERITY INCIDENT - Authorities will be notified immediately!")
 
 # ------------------ MAIN APPLICATION LOGIC ------------------
