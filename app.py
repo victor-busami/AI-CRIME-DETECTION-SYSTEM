@@ -746,14 +746,12 @@ def handle_login():
     """Handle user login with enhanced security (admin only)"""
     with st.sidebar:
         st.header("🔐 Authentication")
-        
         if not st.session_state.logged_in:
             # Only show login form, no registration
             with st.form("login_form"):
                 username = st.text_input("Username")
                 password = st.text_input("Password", type="password")
                 submit_login = st.form_submit_button("Login")
-                
                 if submit_login and username and password:
                     user_role = security_manager.authenticate(username, password)
                     if user_role == 'admin':
@@ -768,10 +766,14 @@ def handle_login():
                         st.error("❌ Only the admin account is allowed to log in.")
                 elif submit_login:
                     st.error("❌ Invalid credentials")
+            # Show Home button after logout (admin_mode True, not logged in)
+            if "admin_mode" in st.session_state and st.session_state.admin_mode and not st.session_state.logged_in:
+                if st.button("🏠 Home"):
+                    st.session_state.admin_mode = False
+                    st.rerun()
         else:
             st.success(f"👋 Welcome, {st.session_state.username}")
             st.write(f"**Role:** {st.session_state.user_role}")
-            
             if st.button("🚪 Logout"):
                 # Clear session
                 st.session_state.logged_in = False
@@ -864,15 +866,19 @@ def render_review_queue(reports: List[Dict]):
         return
     
     for report in filtered_reports[:20]:  # Show first 20 reports
-        with st.expander(f"Report #{report['id']} - {report['timestamp']} - {report['priority']}", 
-                         expanded=False):
+        with st.expander(f"Report #{report['id']} - {report['timestamp']} - {report['priority']}", expanded=False):
             
             col1, col2 = st.columns([2, 1])
             
             with col1:
                 st.write(f"**Location:** {report['location']}")
                 st.write(f"**Description:** {report['description']}")
-                st.write(f"**Objects Detected:** {report['objects_detected']}")
+                # Unified and fixed detected objects display
+                detected_items = report['objects_detected'].strip()
+                if detected_items:
+                    st.write(f"**Objects Detected by AI:** {detected_items}")
+                else:
+                    st.write(f"**Objects Detected by AI:** None")
                 st.write(f"**Keywords:** {report['keywords']}")
                 st.write(f"**CLIP Similarity:** {report['clip_similarity']:.2f}")
                 st.write(f"**Severity Score:** {report['severity_score']:.2f}")
@@ -884,36 +890,37 @@ def render_review_queue(reports: List[Dict]):
                 if report['annotated_path'] and os.path.exists(report['annotated_path']):
                     st.image(report['annotated_path'], caption="AI Detection", width=200)
                 
-                # Admin actions
-                new_priority = st.selectbox(
-                    "Set Priority",
-                    ["Urgent ❗", "Normal ⚠️", "Low Priority ✅"],
-                    index=["Urgent ❗", "Normal ⚠️", "Low Priority ✅"].index(report['priority']),
-                    key=f"priority_{report['id']}"
-                )
-                
-                col_approve, col_reject = st.columns(2)
-                
-                with col_approve:
-                    if st.button("✅ Approve", key=f"approve_{report['id']}"):
-                        db_manager.update_report_status(
-                            report['id'], 
-                            'approved', 
-                            st.session_state.username,
-                            new_priority
-                        )
-                        st.success("Report approved!")
-                        st.rerun()
-                
-                with col_reject:
-                    if st.button("❌ Reject", key=f"reject_{report['id']}"):
-                        db_manager.update_report_status(
-                            report['id'], 
-                            'rejected', 
-                            st.session_state.username
-                        )
-                        st.success("Report rejected!")
-                        st.rerun()
+                # Only show admin actions if status is 'pending'
+                if report['status'] == 'pending':
+                    new_priority = st.selectbox(
+                        "Set Priority",
+                        ["Urgent ❗", "Normal ⚠️", "Low Priority ✅"],
+                        index=["Urgent ❗", "Normal ⚠️", "Low Priority ✅"].index(report['priority']),
+                        key=f"priority_{report['id']}"
+                    )
+                    col_approve, col_reject = st.columns(2)
+                    with col_approve:
+                        if st.button("✅ Approve", key=f"approve_{report['id']}"):
+                            db_manager.update_report_status(
+                                report['id'],
+                                'approved',
+                                st.session_state.username,
+                                new_priority
+                            )
+                            st.success("Report approved!")
+                            st.rerun()
+                    with col_reject:
+                        if st.button("❌ Reject", key=f"reject_{report['id']}"):
+                            db_manager.update_report_status(
+                                report['id'],
+                                'rejected',
+                                st.session_state.username
+                            )
+                            st.success("Report rejected!")
+                            st.rerun()
+                else:
+                    # Hide/disable controls and show status message
+                    st.markdown(f"<div style='margin-top: 1em; color: #16a34a; font-weight: bold;'>Report {report['status'].capitalize()}!</div>", unsafe_allow_html=True)
 
 def render_crime_map(reports: List[Dict]):
     """Render interactive crime map"""
@@ -1102,32 +1109,32 @@ def process_crime_report(uploaded_file, location, description):
         validation_issues = []
         flag_count = 0
 
+        # Normalize keywords for robust matching
+        def normalize_kw(kw):
+            return kw.lower().rstrip('s')
+        found_keywords_norm = set(normalize_kw(kw) for kw in found_keywords)
+        detected_crime_keywords_norm = set(normalize_kw(kw) for kw in detected_crime_keywords)
         # Check for mismatches between description and detected objects
         if found_keywords:
-            detected_str = ", ".join(detected_objects).lower()
-            keyword_matches = sum(1 for kw in found_keywords if kw in detected_str)
-            if keyword_matches == 0 and len(found_keywords) > 0:
+            keyword_matches = found_keywords_norm & detected_crime_keywords_norm
+            if not keyword_matches and len(found_keywords) > 0:
                 validation_issues.append("Keywords in description don't match detected objects")
                 flag_count += 1
-
         # Check CLIP similarity using optimized threshold
         if clip_similarity < ai_manager.clip_threshold:
             validation_issues.append(f"Low image-text similarity ({clip_similarity:.2f} < {ai_manager.clip_threshold})")
             flag_count += 1
-
         # Check detection confidence using optimized threshold
         if detection_confidence < ai_manager.detection_conf:
             validation_issues.append(f"Low object detection confidence ({detection_confidence:.2f} < {ai_manager.detection_conf})")
             flag_count += 1
-
         # --- NEW LOGIC: Combine image and description for priority ---
-        # If both description and image have high-severity crime keywords, or image alone is highly suspicious
         high_severity_keywords = [kw for kw in found_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
         high_severity_detected = [kw for kw in detected_crime_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
-        # Use the higher of the two severity scores
+        high_severity_keywords_norm = set(normalize_kw(kw) for kw in high_severity_keywords)
+        high_severity_detected_norm = set(normalize_kw(kw) for kw in high_severity_detected)
         combined_severity = max(severity_score, sum(SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0.3) for kw in detected_crime_keywords))
         combined_severity = min(combined_severity, 1.0)
-
         # Priority logic
         if high_severity_keywords and high_severity_detected:
             priority = "Urgent ❗"
@@ -1139,11 +1146,17 @@ def process_crime_report(uploaded_file, location, description):
             priority = "Normal ⚠️"
         else:
             priority = "Low Priority ✅"
-
         # If the image and description are both highly severe, or the image alone is highly severe, escalate
         if (high_severity_keywords and high_severity_detected) or (combined_severity > ai_manager.auto_escalate_threshold and high_severity_detected):
             priority = "Urgent ❗"
             flagged_for_review = False
+        # --- STRICTER MISMATCH FLAGGING ---
+        # Only flag for mismatch if there is NO intersection between high-severity keywords in description and detected by AI
+        if high_severity_keywords and not high_severity_detected:
+            if not (high_severity_keywords_norm & high_severity_detected_norm):
+                flagged_for_review = True
+                if "Severe mismatch: high-severity keywords in description but not in image" not in validation_issues:
+                    validation_issues.append("Severe mismatch: high-severity keywords in description but not in image")
         # If there is a mismatch and at least two issues, flag for review
         if flag_count >= 2:
             flagged_for_review = True
@@ -1156,6 +1169,8 @@ def process_crime_report(uploaded_file, location, description):
         image.save(img_path)
         Image.fromarray(annotated_img).save(annotated_path)
         lat, lon = LOCATION_COORDS.get(location, (0.0, 0.0))
+        # Always save objects_detected as a comma-separated string (even if empty)
+        objects_detected_str = ", ".join(detected_objects) if detected_objects else ""
         report_data = {
             'location': location,
             'latitude': lat,
@@ -1163,7 +1178,7 @@ def process_crime_report(uploaded_file, location, description):
             'image_path': img_path,
             'annotated_path': annotated_path,
             'description': description,
-            'objects_detected': ", ".join(detected_objects),
+            'objects_detected': objects_detected_str,
             'priority': priority,
             'sentiment': sentiment_label,
             'keywords': ", ".join(sorted(set(found_keywords + detected_crime_keywords))),
@@ -1254,7 +1269,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; font-size: 0.8em;'>
-        🚨 AI Crime Detection System | Powered by Advanced Machine Learning
+        �� AI Crime Detection System | Powered by Advanced Machine Learning
     </div>
     """, unsafe_allow_html=True)
 
