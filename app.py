@@ -873,7 +873,7 @@ def render_review_queue(reports: List[Dict]):
             with col1:
                 st.write(f"**Location:** {report['location']}")
                 st.write(f"**Description:** {report['description']}")
-                # Unified and fixed detected objects display
+                # Only show detected objects if present
                 detected_items = report['objects_detected'].strip()
                 if detected_items:
                     st.write(f"**Objects Detected by AI:** {detected_items}")
@@ -883,7 +883,8 @@ def render_review_queue(reports: List[Dict]):
                 st.write(f"**CLIP Similarity:** {report['clip_similarity']:.2f}")
                 st.write(f"**Severity Score:** {report['severity_score']:.2f}")
                 
-                if report['flagged_for_review']:
+                # Only show flagged warning if report is pending
+                if report['flagged_for_review'] and report['status'] == 'pending':
                     st.warning("⚠️ This report has been flagged for review")
             
             with col2:
@@ -1114,8 +1115,16 @@ def process_crime_report(uploaded_file, location, description):
             return kw.lower().rstrip('s')
         found_keywords_norm = set(normalize_kw(kw) for kw in found_keywords)
         detected_crime_keywords_norm = set(normalize_kw(kw) for kw in detected_crime_keywords)
-        # Check for mismatches between description and detected objects
-        if found_keywords:
+        high_severity_keywords = [kw for kw in found_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
+        high_severity_detected = [kw for kw in detected_crime_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
+        high_severity_keywords_norm = set(normalize_kw(kw) for kw in high_severity_keywords)
+        high_severity_detected_norm = set(normalize_kw(kw) for kw in high_severity_detected)
+        # --- NEW: If there is any intersection between high-severity keywords in description and detected by AI, skip mismatch flagging ---
+        skip_mismatch_flagging = False
+        if high_severity_keywords_norm & high_severity_detected_norm:
+            skip_mismatch_flagging = True
+        # Check for mismatches between description and detected objects (only if not skipping)
+        if found_keywords and not skip_mismatch_flagging:
             keyword_matches = found_keywords_norm & detected_crime_keywords_norm
             if not keyword_matches and len(found_keywords) > 0:
                 validation_issues.append("Keywords in description don't match detected objects")
@@ -1129,10 +1138,6 @@ def process_crime_report(uploaded_file, location, description):
             validation_issues.append(f"Low object detection confidence ({detection_confidence:.2f} < {ai_manager.detection_conf})")
             flag_count += 1
         # --- NEW LOGIC: Combine image and description for priority ---
-        high_severity_keywords = [kw for kw in found_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
-        high_severity_detected = [kw for kw in detected_crime_keywords if SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0) >= 0.7]
-        high_severity_keywords_norm = set(normalize_kw(kw) for kw in high_severity_keywords)
-        high_severity_detected_norm = set(normalize_kw(kw) for kw in high_severity_detected)
         combined_severity = max(severity_score, sum(SEVERITY_WEIGHTS.get(kw.rstrip('s'), 0.3) for kw in detected_crime_keywords))
         combined_severity = min(combined_severity, 1.0)
         # Priority logic
@@ -1152,7 +1157,7 @@ def process_crime_report(uploaded_file, location, description):
             flagged_for_review = False
         # --- STRICTER MISMATCH FLAGGING ---
         # Only flag for mismatch if there is NO intersection between high-severity keywords in description and detected by AI
-        if high_severity_keywords and not high_severity_detected:
+        if high_severity_keywords and not high_severity_detected and not skip_mismatch_flagging:
             if not (high_severity_keywords_norm & high_severity_detected_norm):
                 flagged_for_review = True
                 if "Severe mismatch: high-severity keywords in description but not in image" not in validation_issues:
