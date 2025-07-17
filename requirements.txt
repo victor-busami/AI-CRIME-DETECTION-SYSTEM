@@ -15,3 +15,4 @@ plotly
 folium
 streamlit-folium
 torchvision
+opencv-python-headless
