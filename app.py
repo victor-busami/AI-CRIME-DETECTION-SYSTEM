@@ -768,7 +768,6 @@ def handle_login():
                         st.error("❌ Only the admin account is allowed to log in.")
                 elif submit_login:
                     st.error("❌ Invalid credentials")
-            st.info("Only the admin can log in. User registration is disabled.")
         else:
             st.success(f"👋 Welcome, {st.session_state.username}")
             st.write(f"**Role:** {st.session_state.user_role}")
@@ -1203,13 +1202,17 @@ def process_crime_report(uploaded_file, location, description):
 # ------------------ MAIN APPLICATION LOGIC ------------------
 def main():
     """Main application logic"""
-    
     # Sidebar: Admin access button
     with st.sidebar:
         st.header("System Access")
-        admin_mode = st.checkbox("🔑 Admin Login", value=False, help="Check to access admin features (login required)")
-
-    if admin_mode:
+        if "admin_mode" not in st.session_state:
+            st.session_state.admin_mode = False
+        if not st.session_state.admin_mode:
+            if st.button("🔑 Admin Login", help="Click to access admin features (login required)"):
+                st.session_state.admin_mode = True
+        else:
+            st.info("Admin login mode enabled. Please log in below.")
+    if st.session_state.admin_mode:
         # Handle authentication for admin
         handle_login()
         if not st.session_state.logged_in:
@@ -1229,8 +1232,6 @@ def main():
             **Admin Credentials:**
             - Username: `admin`
             - Password: `CrimeAdmin2024!`
-            
-            _User registration is disabled. Only the admin can log in._
             """)
             return
         # Validate session
